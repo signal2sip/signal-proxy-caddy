@@ -50,9 +50,10 @@ defense against a determined, sophisticated censor.
   for it automatically on first start, no manual certbot step.
 - Ports 80/tcp (ACME HTTP-01 challenge) and 443/tcp+udp reachable from
   the internet.
-- Go 1.21+ to build (only needed at build time - the resulting binary
-  is static, nothing Go-related needed at runtime). `apt install
-  golang-go` is fine *if* it gives you 1.21+ - check `go version` first:
+- Go 1.21+ to build - only on whatever machine does the *building*,
+  not necessarily the deploy target itself (see "Build elsewhere"
+  below). `apt install golang-go` is fine *if* it gives you 1.21+ -
+  check `go version` first:
   - Debian 13 (trixie) ships 1.24, Ubuntu 24.04 ships ~1.22 - plain
     `apt install golang-go` is enough.
   - Debian 12 (bookworm)'s default repo ships 1.19 - too old (predates
@@ -76,6 +77,27 @@ go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
 Named `signal-proxy-caddy`, not `caddy`, so it doesn't collide with a
 distro-packaged `caddy` binary/service if one is already on the box.
+
+### Build elsewhere, copy just the binary
+
+Caddy (and `caddy-l4` - checked its `go.mod`, no cgo-requiring
+dependencies) builds as a fully static binary, so there's no need to
+have Go on the actual deploy target at all. Cross-compile wherever's
+convenient and `scp` the single resulting file over:
+
+```sh
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+"$(go env GOPATH)/bin/xcaddy" build --with github.com/mholt/caddy-l4 \
+    --output signal-proxy-caddy
+
+scp signal-proxy-caddy root@your-vps:/usr/local/bin/signal-proxy-caddy
+ssh root@your-vps chmod +x /usr/local/bin/signal-proxy-caddy
+```
+
+Set `GOARCH=arm64` instead if the target is an ARM VPS (check with
+your provider if unsure). Everything else in Install below - Caddyfile,
+systemd unit, `useradd` - is unchanged either way; only this one step
+moves.
 
 ## Install
 
