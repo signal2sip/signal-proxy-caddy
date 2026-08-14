@@ -32,4 +32,5 @@ jobs:
         env:
           SIGNAL_PROXY_DOMAIN: proxy.example.com
           SIGNAL_PROXY_REDIRECT_DOMAIN: https://example.com
+          SIGNAL_PROXY_ALLOWED_IP: 0.0.0.0
         run: ./signal-proxy-caddy validate --config caddy/Caddyfile

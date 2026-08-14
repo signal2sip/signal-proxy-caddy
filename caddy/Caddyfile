@@ -15,6 +15,37 @@
 							# map (data/nginx-relay/nginx.conf) - one fewer
 							# thing to keep in sync if Signal adds a domain.
 							tls sni "*.signal.org" "*.*.signal.org"
+							# Private-use gate: org.signal.tls has no
+							# username/password field (confirmed via
+							# libsignal's ConnectionProxyConfig::from_parts()
+							# - it's just proxy_host/proxy_port, nothing
+							# else), so there's no protocol-level way to
+							# authenticate a specific caller. Restricting by
+							# source IP instead - both conditions in this
+							# matcher set are AND'd, so a non-allowlisted
+							# caller (even with the exactly right inner SNI)
+							# falls through to the same decoy response as any
+							# other unmatched traffic below, not a distinct
+							# "access denied" - that would itself be a
+							# probing signal. A bare IP with no "/mask" is
+							# parsed as an exact /32 (or /128 for IPv6) match,
+							# not a wildcard (verified against caddy/caddy's
+							# own CIDRExpressionToPrefix()) - so:
+							#   - SIGNAL_PROXY_ALLOWED_IP=0.0.0.0 (placeholder
+							#     default) matches no real caller - relay
+							#     stays closed until configured.
+							#   - =0.0.0.0/0 (add ::/0 too for IPv6) opens it
+							#     to everyone - the public-relay case.
+							#   - =<real IP/CIDR> restricts it to that caller
+							#     - the private, own-accounts-only case this
+							#     is defaulted for. Multiple values are
+							#     space-separated, e.g. "1.2.3.4 2001:db8::1"
+							#     if the caller might connect over either
+							#     IPv4 or IPv6.
+							# Never leave this variable totally unset - the
+							# matcher requires at least one value and Caddy
+							# will fail to start without one.
+							remote_ip {$SIGNAL_PROXY_ALLOWED_IP}
 						}
 						route @signal-proxy {
 							proxy {l4.tls.server_name}:443

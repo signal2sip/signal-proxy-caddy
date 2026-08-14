@@ -43,6 +43,40 @@ ClientHello for some other domain still just fails against the plain
 HTTP decoy listener) - this is a reasonable floor, not a complete
 defense against a determined, sophisticated censor.
 
+## Restricting who can use it
+
+The `org.signal.tls` scheme has no username/password field at all -
+confirmed via `libsignal`'s `ConnectionProxyConfig::from_parts()`,
+which builds a plain `proxy_host`/`proxy_port` pair and nothing else -
+so there's no protocol-level way for a real Signal (or signal2sip)
+client to authenticate itself to a relay. `caddy/Caddyfile` gates the
+real relay route on `SIGNAL_PROXY_ALLOWED_IP` (`caddy-l4`'s
+`remote_ip` matcher) instead. A non-matching caller doesn't get an
+explicit rejection - it falls through to the same decoy response as
+any other non-Signal traffic, so this restriction doesn't create a new
+probing signal of its own.
+
+**This variable can never be left totally unset** - `remote_ip`
+requires at least one value or Caddy refuses to start. A bare IP with
+no `/mask` is parsed as an exact `/32` (or `/128` for IPv6) match, not
+a wildcard (verified against `caddy`'s own `CIDRExpressionToPrefix()`),
+so set it to one of:
+
+- `0.0.0.0` - the placeholder default. Matches no real caller (that
+  address is never a real TCP source) - relay stays closed until
+  configured.
+- `0.0.0.0/0` (add `::/0` too if you also want IPv6 open) - matches
+  everyone. Use this if the goal is a public relay for others in
+  censored regions - the use case
+  [Signal's own blog post](https://signal.org/blog/help-iran-reconnect/)
+  asks people to help with; anyone who finds the address should be
+  able to use it, by design, in that case.
+- A real static IP or CIDR - restricts it to that caller. This is the
+  default assumption throughout this README (only your own signal2sip
+  account(s) should use it). Space-separated for multiple values, e.g.
+  `"1.2.3.4 2001:db8::1"` if the caller might connect over either
+  IPv4 or IPv6.
+
 ## Requirements
 
 - A real domain (`SIGNAL_PROXY_DOMAIN`) with DNS A/AAAA pointed at this
@@ -142,6 +176,7 @@ cp caddy/Caddyfile /etc/signal-proxy/Caddyfile
 cat > /etc/signal-proxy/env <<'EOF'
 SIGNAL_PROXY_DOMAIN=signal.yourdomain.tld
 SIGNAL_PROXY_REDIRECT_DOMAIN=https://example.com
+SIGNAL_PROXY_ALLOWED_IP=0.0.0.0
 EOF
 chown root:signal-proxy /etc/signal-proxy/env
 chmod 640 /etc/signal-proxy/env
@@ -182,6 +217,7 @@ cp caddy/Caddyfile /etc/signal-proxy/Caddyfile
 cat > /etc/signal-proxy/env <<'EOF'
 SIGNAL_PROXY_DOMAIN=signal.yourdomain.tld
 SIGNAL_PROXY_REDIRECT_DOMAIN=https://example.com
+SIGNAL_PROXY_ALLOWED_IP=0.0.0.0
 EOF
 chown root:signal-proxy /etc/signal-proxy/env
 chmod 640 /etc/signal-proxy/env
@@ -214,6 +250,7 @@ cp caddy/Caddyfile /usr/local/etc/signal-proxy/Caddyfile
 cat > /usr/local/etc/signal-proxy/env <<'EOF'
 SIGNAL_PROXY_DOMAIN=signal.yourdomain.tld
 SIGNAL_PROXY_REDIRECT_DOMAIN=https://example.com
+SIGNAL_PROXY_ALLOWED_IP=0.0.0.0
 EOF
 chmod 640 /usr/local/etc/signal-proxy/env
 
