@@ -1,0 +1,68 @@
+# One static binary per CPU architecture, not per distro - Caddy +
+# caddy-l4 build with CGO_ENABLED=0 (verified: neither has a cgo
+# dependency), so the Go runtime makes syscalls directly instead of
+# going through libc. The same binary runs unmodified on glibc
+# (Debian/Ubuntu) and musl (Alpine) - only GOARCH varies.
+#
+# Tag push (`v*`) builds + attaches binaries to a GitHub Release.
+# workflow_dispatch builds the same matrix without releasing, for
+# testing the build itself without committing to a version.
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: Install xcaddy
+        run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+
+      - name: Build
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          out="signal-proxy-caddy_${{ github.ref_name }}_linux_${{ matrix.goarch }}"
+          "$(go env GOPATH)/bin/xcaddy" build --with github.com/mholt/caddy-l4 --output "$out"
+          sha256sum "$out" > "$out.sha256"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: signal-proxy-caddy_linux_${{ matrix.goarch }}
+          path: signal-proxy-caddy_*_linux_${{ matrix.goarch }}*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --title "${{ github.ref_name }}" \
+            --generate-notes

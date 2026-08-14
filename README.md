@@ -99,6 +99,25 @@ your provider if unsure). Everything else in Install below - Caddyfile,
 systemd unit, `useradd` - is unchanged either way; only this one step
 moves.
 
+### Or just download a release build
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) builds
+`linux/amd64` and `linux/arm64` binaries (`CGO_ENABLED=0`, so the same
+binary works on Debian, Ubuntu, and Alpine alike - only the
+architecture varies, not the distro) and attaches them to every tagged
+[Release](../../releases), alongside a `.sha256` for each. No local Go
+toolchain needed at all:
+
+```sh
+curl -LO https://github.com/signal2sip/signal-proxy-caddy/releases/latest/download/signal-proxy-caddy_<tag>_linux_amd64
+curl -LO https://github.com/signal2sip/signal-proxy-caddy/releases/latest/download/signal-proxy-caddy_<tag>_linux_amd64.sha256
+sha256sum -c signal-proxy-caddy_<tag>_linux_amd64.sha256
+install -m 755 signal-proxy-caddy_<tag>_linux_amd64 /usr/local/bin/signal-proxy-caddy
+```
+
+Replace `<tag>` with the actual release tag (e.g. `v1.0.0`) - `/latest/download/`
+resolves the release but not the filename inside it.
+
 ## Install
 
 ```sh

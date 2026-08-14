@@ -1,0 +1,35 @@
+# Fast feedback on every push/PR: builds a native (runner-arch) binary
+# and runs `caddy validate` against caddy/Caddyfile - catches a broken
+# Caddyfile before it ever reaches release.yml's multi-arch build.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: Install xcaddy
+        run: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+
+      - name: Build a native binary
+        env:
+          CGO_ENABLED: 0
+        run: |
+          "$(go env GOPATH)/bin/xcaddy" build --with github.com/mholt/caddy-l4 \
+            --output ./signal-proxy-caddy
+
+      - name: Validate Caddyfile
+        env:
+          SIGNAL_PROXY_DOMAIN: proxy.example.com
+          SIGNAL_PROXY_REDIRECT_DOMAIN: https://example.com
+        run: ./signal-proxy-caddy validate --config caddy/Caddyfile
