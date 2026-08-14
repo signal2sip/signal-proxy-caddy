@@ -1,0 +1,64 @@
+{
+	servers {
+		listener_wrappers {
+			layer4 {
+				@signal tls sni {$SIGNAL_PROXY_DOMAIN}
+				route @signal {
+					tls
+					subroute {
+						@signal-proxy {
+							# Wildcard covers every real Signal-Server domain
+							# (chat., cdn., cdn2., cdn3., cdsi., storage.,
+							# svr2., svrb., sfu.voip., updates., updates2.,
+							# grpc.chat.) with one rule, unlike the official
+							# signalapp/Signal-TLS-Proxy's explicit per-domain
+							# map (data/nginx-relay/nginx.conf) - one fewer
+							# thing to keep in sync if Signal adds a domain.
+							tls sni "*.signal.org" "*.*.signal.org"
+						}
+						route @signal-proxy {
+							proxy {l4.tls.server_name}:443
+						}
+						# Anything else that arrives once the outer TLS layer
+						# is decrypted - a real browser's plain HTTP request,
+						# or a TLS ClientHello for some other domain - falls
+						# through to here instead of the connection just
+						# dying. That "only Signal traffic gets forwarded,
+						# everything else drops" asymmetry is exactly what
+						# https://github.com/net4people/bbs/issues/60 (2021)
+						# demonstrated makes a proxy trivially fingerprintable
+						# by active probing: connect once with a Signal SNI,
+						# once with any other SNI, and compare. Checked
+						# 2026-08-14: the official signalapp/Signal-TLS-Proxy
+						# still does exactly this ("default deny" in
+						# nginx-relay/nginx.conf, dropped to 127.0.0.1:9) as
+						# of its latest commit. Redirecting here instead of
+						# dropping removes that specific asymmetry.
+						route {
+							proxy 127.0.0.1:8080
+						}
+					}
+				}
+				route
+			}
+			tls
+		}
+	}
+}
+
+# Local-only decoy responder - only ever reached via the layer4 fallback
+# route above, never directly exposed. A plain redirect is enough to
+# defeat the specific probe this exists for (does a real HTTP request get
+# a normal-looking response, or does the connection just die); it doesn't
+# attempt to mimic a real site's content.
+:8080 {
+	redir {$SIGNAL_PROXY_REDIRECT_DOMAIN} 302
+}
+
+# Needed only so Caddy's automatic HTTPS machinery manages a real
+# Let's Encrypt cert for this domain - real connections for it never
+# reach this block, the layer4 listener_wrapper above intercepts them
+# at the raw listener level first.
+{$SIGNAL_PROXY_DOMAIN} {
+	abort
+}

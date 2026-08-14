@@ -1,0 +1,27 @@
+# Based on caddyserver/dist's own caddy.service (init/caddy.service) -
+# same Type=notify/hardening options, adjusted for a dedicated binary,
+# user, and config path so this doesn't collide with a distro-packaged
+# `caddy` if one is also installed on the same host.
+[Unit]
+Description=Signal TLS proxy relay (Caddy + caddy-l4)
+Documentation=https://github.com/signal2sip/signal-proxy-caddy
+After=network.target network-online.target
+Requires=network-online.target
+
+[Service]
+Type=notify
+User=signal-proxy
+Group=signal-proxy
+EnvironmentFile=/etc/signal-proxy/env
+ExecStart=/usr/local/bin/signal-proxy-caddy run --config /etc/signal-proxy/Caddyfile
+ExecReload=/usr/local/bin/signal-proxy-caddy reload --config /etc/signal-proxy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=full
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
