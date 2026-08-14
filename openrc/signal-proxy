@@ -1,0 +1,41 @@
+#!/sbin/openrc-run
+# OpenRC service script - covers both Alpine and Gentoo, which both use
+# OpenRC as their default init system (unlike Debian/Ubuntu's systemd).
+# Same binary as the systemd install (linux/amd64 or linux/arm64) -
+# only the init system differs, not the OS kernel.
+#
+# Install: cp this file to /etc/init.d/signal-proxy, chmod +x it, then
+# `rc-update add signal-proxy default && rc-service signal-proxy start`.
+
+name="signal-proxy-caddy"
+description="Signal TLS proxy relay (Caddy + caddy-l4)"
+
+command="/usr/local/bin/signal-proxy-caddy"
+command_args="run --config /etc/signal-proxy/Caddyfile"
+# Caddy doesn't background itself or write a pidfile on its own -
+# command_background tells start-stop-daemon to fork it and write
+# $pidfile itself. See OpenRC's own service-script-guide.md, the
+# "command_background=true" section, for why this pairing is required.
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+command_user="signal-proxy:signal-proxy"
+
+signal_proxy_env="/etc/signal-proxy/env"
+
+start_pre() {
+    # start-stop-daemon has no built-in --envfile flag - export the
+    # vars ourselves so Caddyfile's {$VAR} substitution sees them, same
+    # effect as systemd's EnvironmentFile=.
+    if [ -f "${signal_proxy_env}" ]; then
+        set -a
+        . "${signal_proxy_env}"
+        set +a
+    fi
+    checkpath --directory --owner signal-proxy:signal-proxy --mode 0750 \
+        /var/lib/signal-proxy
+}
+
+depend() {
+    need net
+    use dns
+}

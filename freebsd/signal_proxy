@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# PROVIDE: signal_proxy
+# REQUIRE: NETWORKING DAEMON
+# KEYWORD: shutdown
+#
+# rc.conf(5) variables:
+#
+# signal_proxy_enable (bool):     Default "NO". Set to "YES" to enable.
+# signal_proxy_user (str):        Default "root". FreeBSD has no direct
+#   equivalent of Linux's setcap/AmbientCapabilities for binding ports
+#   <1024 as a non-root user - running as root (the default here) is
+#   the simple path. For a non-root setup instead, see mac_portacl(4)
+#   in the FreeBSD Handbook and set this to your dedicated user once
+#   that's configured - this script doesn't assume either way.
+# signal_proxy_config (str):      Default "/usr/local/etc/signal-proxy/Caddyfile".
+# signal_proxy_env (str):         Default "/usr/local/etc/signal-proxy/env".
+
+. /etc/rc.subr
+
+name="signal_proxy"
+rcvar="signal_proxy_enable"
+
+load_rc_config "${name}"
+
+: ${signal_proxy_enable:="NO"}
+: ${signal_proxy_user:="root"}
+: ${signal_proxy_config:="/usr/local/etc/signal-proxy/Caddyfile"}
+: ${signal_proxy_env:="/usr/local/etc/signal-proxy/env"}
+
+pidfile="/var/run/${name}.pid"
+
+# /usr/sbin/daemon (FreeBSD base system, not this project's own code)
+# is the standard idiom for running a foreground-only binary (Caddy
+# doesn't self-daemonize) under rc.d: forks it into the background,
+# redirects its stdio (-f), writes $pidfile (-P), restarts it if it
+# dies (-r, rc.subr's own Restart=on-failure equivalent), and drops to
+# -u ${signal_proxy_user}.
+command="/usr/sbin/daemon"
+command_args="-f -P ${pidfile} -r -u ${signal_proxy_user} -- \
+    /usr/local/bin/signal-proxy-caddy run \
+    --config ${signal_proxy_config} --envfile ${signal_proxy_env}"
+
+run_rc_command "$1"

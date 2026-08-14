@@ -102,23 +102,32 @@ moves.
 ### Or just download a release build
 
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds
-`linux/amd64` and `linux/arm64` binaries (`CGO_ENABLED=0`, so the same
-binary works on Debian, Ubuntu, and Alpine alike - only the
-architecture varies, not the distro) and attaches them to every tagged
-[Release](../../releases), alongside a `.sha256` for each. No local Go
+`{linux,freebsd} x {amd64,arm64}` binaries (`CGO_ENABLED=0`, so each
+`linux` binary works on Debian, Ubuntu, Alpine, and Gentoo alike - only
+the architecture varies, not the distro; FreeBSD gets its own binary
+since it's a different kernel) and attaches all four to every tagged
+[Release](../../releases), alongside a `.sha256` each. No local Go
 toolchain needed at all:
 
 ```sh
-curl -LO https://github.com/signal2sip/signal-proxy-caddy/releases/latest/download/signal-proxy-caddy_<tag>_linux_amd64
-curl -LO https://github.com/signal2sip/signal-proxy-caddy/releases/latest/download/signal-proxy-caddy_<tag>_linux_amd64.sha256
-sha256sum -c signal-proxy-caddy_<tag>_linux_amd64.sha256
-install -m 755 signal-proxy-caddy_<tag>_linux_amd64 /usr/local/bin/signal-proxy-caddy
+os=linux    # or freebsd
+arch=amd64  # or arm64
+tag=v1.0.0  # an actual release tag - /latest/download/ resolves the
+            # release but not the filename inside it, so this can't be
+            # "latest" itself
+
+curl -LO "https://github.com/signal2sip/signal-proxy-caddy/releases/download/${tag}/signal-proxy-caddy_${tag}_${os}_${arch}"
+curl -LO "https://github.com/signal2sip/signal-proxy-caddy/releases/download/${tag}/signal-proxy-caddy_${tag}_${os}_${arch}.sha256"
+sha256sum -c "signal-proxy-caddy_${tag}_${os}_${arch}.sha256"
+install -m 755 "signal-proxy-caddy_${tag}_${os}_${arch}" /usr/local/bin/signal-proxy-caddy
 ```
 
-Replace `<tag>` with the actual release tag (e.g. `v1.0.0`) - `/latest/download/`
-resolves the release but not the filename inside it.
+`SIGNAL_PROXY_REDIRECT_DOMAIN` (used below, all install variants) is
+any real site to redirect non-Signal-destined traffic to (a 302, not a
+proxy of that site's actual content) - doesn't need to be related to
+signal2sip at all.
 
-## Install
+## Install (systemd - Debian, Ubuntu, and most other Linux distros)
 
 ```sh
 # Dedicated system user - Caddy's cert storage defaults to
@@ -150,9 +159,74 @@ systemctl enable --now signal-proxy.service
 journalctl -u signal-proxy -f
 ```
 
-`SIGNAL_PROXY_REDIRECT_DOMAIN` is any real site to redirect
-non-Signal-destined traffic to (a 302, not a proxy of that site's
-actual content) - doesn't need to be related to signal2sip at all.
+## Install (OpenRC - Alpine, Gentoo)
+
+Same `linux/amd64` or `linux/arm64` binary as systemd above - only the
+init system differs. Linux capabilities (not FreeBSD, see below) still
+apply here, but OpenRC has no `AmbientCapabilities=` equivalent, so
+grant the bind-privileged-port capability on the binary file itself
+instead (`apk add libcap-setcap` on Alpine, `emerge sys-libs/libcap` on
+Gentoo, one-time):
+
+```sh
+# Alpine uses `adduser`/`addgroup`, not useradd/groupadd
+addgroup -S signal-proxy
+adduser -S -D -h /var/lib/signal-proxy -s /sbin/nologin -G signal-proxy signal-proxy
+# Gentoo (or any OpenRC box with shadow-utils/useradd instead): the
+# same `useradd` line from the systemd section above works unchanged.
+
+mkdir -p /etc/signal-proxy /var/lib/signal-proxy
+chown signal-proxy:signal-proxy /var/lib/signal-proxy
+cp caddy/Caddyfile /etc/signal-proxy/Caddyfile
+
+cat > /etc/signal-proxy/env <<'EOF'
+SIGNAL_PROXY_DOMAIN=signal.yourdomain.tld
+SIGNAL_PROXY_REDIRECT_DOMAIN=https://example.com
+EOF
+chown root:signal-proxy /etc/signal-proxy/env
+chmod 640 /etc/signal-proxy/env
+
+setcap cap_net_bind_service=+ep /usr/local/bin/signal-proxy-caddy
+
+cp openrc/signal-proxy /etc/init.d/signal-proxy
+chmod +x /etc/init.d/signal-proxy
+
+/usr/local/bin/signal-proxy-caddy validate --config /etc/signal-proxy/Caddyfile --envfile /etc/signal-proxy/env
+
+rc-update add signal-proxy default
+rc-service signal-proxy start
+tail -f /var/log/messages   # or wherever syslog lands on your box
+```
+
+## Install (FreeBSD)
+
+Runs as root by default here (see `freebsd/signal_proxy`'s own header
+comment for why - FreeBSD has no direct equivalent of Linux's
+setcap/AmbientCapabilities for binding ports <1024 as a non-root user;
+`mac_portacl(4)` can do it but is out of scope for this script).
+
+```sh
+pw useradd signal-proxy -d /var/db/signal-proxy -s /usr/sbin/nologin -m
+
+mkdir -p /usr/local/etc/signal-proxy
+cp caddy/Caddyfile /usr/local/etc/signal-proxy/Caddyfile
+
+cat > /usr/local/etc/signal-proxy/env <<'EOF'
+SIGNAL_PROXY_DOMAIN=signal.yourdomain.tld
+SIGNAL_PROXY_REDIRECT_DOMAIN=https://example.com
+EOF
+chmod 640 /usr/local/etc/signal-proxy/env
+
+cp freebsd/signal_proxy /usr/local/etc/rc.d/signal_proxy
+chmod +x /usr/local/etc/rc.d/signal_proxy
+
+/usr/local/bin/signal-proxy-caddy validate \
+    --config /usr/local/etc/signal-proxy/Caddyfile \
+    --envfile /usr/local/etc/signal-proxy/env
+
+sysrc signal_proxy_enable="YES"
+service signal_proxy start
+```
 
 ## Use it
 
