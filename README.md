@@ -146,7 +146,7 @@ toolchain needed at all:
 ```sh
 os=linux    # or freebsd
 arch=amd64  # or arm64
-tag=v1.0.0  # an actual release tag - /latest/download/ resolves the
+tag=v0.1.1  # an actual release tag - /latest/download/ resolves the
             # release but not the filename inside it, so this can't be
             # "latest" itself
 
@@ -164,6 +164,16 @@ signal2sip at all.
 ## Install (systemd - Debian, Ubuntu, and most other Linux distros)
 
 ```sh
+git clone https://github.com/signal2sip/signal-proxy-caddy
+cd signal-proxy-caddy
+
+tag=v0.1.1  # check https://github.com/signal2sip/signal-proxy-caddy/releases
+            # for the current one
+arch=amd64  # or arm64
+wget "https://github.com/signal2sip/signal-proxy-caddy/releases/download/${tag}/signal-proxy-caddy_${tag}_linux_${arch}"
+mv "signal-proxy-caddy_${tag}_linux_${arch}" /usr/local/bin/signal-proxy-caddy
+chmod +x /usr/local/bin/signal-proxy-caddy
+
 # Dedicated system user - Caddy's cert storage defaults to
 # $HOME/.local/share/caddy, so giving it a real home dir here is enough,
 # no extra XDG_DATA_HOME plumbing needed.
@@ -204,6 +214,16 @@ instead (`apk add libcap-setcap` on Alpine, `emerge sys-libs/libcap` on
 Gentoo, one-time):
 
 ```sh
+git clone https://github.com/signal2sip/signal-proxy-caddy
+cd signal-proxy-caddy
+
+tag=v0.1.1  # check https://github.com/signal2sip/signal-proxy-caddy/releases
+            # for the current one
+arch=amd64  # or arm64
+wget "https://github.com/signal2sip/signal-proxy-caddy/releases/download/${tag}/signal-proxy-caddy_${tag}_linux_${arch}"
+mv "signal-proxy-caddy_${tag}_linux_${arch}" /usr/local/bin/signal-proxy-caddy
+chmod +x /usr/local/bin/signal-proxy-caddy
+
 # Alpine uses `adduser`/`addgroup`, not useradd/groupadd
 addgroup -S signal-proxy
 adduser -S -D -h /var/lib/signal-proxy -s /sbin/nologin -G signal-proxy signal-proxy
@@ -222,6 +242,8 @@ EOF
 chown root:signal-proxy /etc/signal-proxy/env
 chmod 640 /etc/signal-proxy/env
 
+# apk add libcap-setcap   # Alpine
+# emerge sys-libs/libcap  # Gentoo
 setcap cap_net_bind_service=+ep /usr/local/bin/signal-proxy-caddy
 
 cp openrc/signal-proxy /etc/init.d/signal-proxy
@@ -242,6 +264,16 @@ setcap/AmbientCapabilities for binding ports <1024 as a non-root user;
 `mac_portacl(4)` can do it but is out of scope for this script).
 
 ```sh
+git clone https://github.com/signal2sip/signal-proxy-caddy
+cd signal-proxy-caddy
+
+tag=v0.1.1  # check https://github.com/signal2sip/signal-proxy-caddy/releases
+            # for the current one
+arch=amd64  # or arm64
+fetch "https://github.com/signal2sip/signal-proxy-caddy/releases/download/${tag}/signal-proxy-caddy_${tag}_freebsd_${arch}"
+mv "signal-proxy-caddy_${tag}_freebsd_${arch}" /usr/local/bin/signal-proxy-caddy
+chmod +x /usr/local/bin/signal-proxy-caddy
+
 pw useradd signal-proxy -d /var/db/signal-proxy -s /usr/sbin/nologin -m
 
 mkdir -p /usr/local/etc/signal-proxy
