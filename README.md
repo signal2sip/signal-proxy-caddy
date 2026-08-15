@@ -1,3 +1,5 @@
+[![Release binaries](https://github.com/signal2sip/signal-proxy-caddy/actions/workflows/release.yml/badge.svg)](https://github.com/signal2sip/signal-proxy-caddy/actions/workflows/release.yml)
+
 # signal-proxy-caddy
 
 A relay server for Signal's manual proxy feature (the `org.signal.tls`
